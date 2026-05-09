@@ -1,0 +1,24 @@
+ ██████╗ ██████╗  ██████╗██╗  ██╗███████╗███████╗████████╗██████╗  █████╗     █████╗ ██╗
+██╔═══██╗██╔══██╗██╔════╝██║  ██║██╔════╝██╔════╝╚══██╔══╝██╔══██╗██╔══██╗   ██╔══██╗██║
+██║   ██║██████╔╝██║     ███████║█████╗  ███████╗   ██║   ██████╔╝███████║   ███████║██║
+██║   ██║██╔══██╗██║     ██╔══██║██╔══╝  ╚════██║   ██║   ██╔══██╗██╔══██║   ██╔══██║██║
+╚██████╔╝██║  ██║╚██████╗██║  ██║███████╗███████║   ██║   ██║  ██║██║  ██║██╗██║  ██║██║
+ ╚═════╝ ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═╝╚═╝
+########################################################################################
+
+Problem Statement :
+
+    While agents are gaining power in transforming the Application and Automation Scenario in current IT 
+    people do not have an explicit idea of what it is or how to work with it. With Orchestra.AI, people 
+    will be able to orchestrate agents by choosing from variety of models instead of a single model, and people could focus on 
+    using the ai by customizing it based on skills and adding attributes to their agents. This idea is not just for developers
+    but for anyone with workflow. You could build and orchestrate agents for building a data pipeline, or you could build and 
+    orchestrate an agent for planning your trip to los angeles. 
+
+Plans: 
+
+    - Orchestra.AI - a studio for agents to work togather regardless their background. they can be from open ai or claude, 
+    they will be able to relax context and messages to each other on their work. 
+    - the initial design view is already created in the folder - /home/shivthedev/projects/agent-orchestrator-project/Agent Orchestration App
+    - I am thinking to build this app with React in Frontend, python  or go backend, with a good DB. I am also open to tech stack choice here, since 
+    I have not built a project like this. 
