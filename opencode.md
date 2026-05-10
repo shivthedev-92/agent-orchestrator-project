@@ -55,7 +55,7 @@ React SPA (port 5173) → FastAPI (port 8000) → PostgreSQL (port 5432)
 ## Roadmap
 
 ### Phase 2: Wire Frontend ↔ Backend
-- [ ] Workflow CRUD (save/load/list/delete via API)
+- [x] Workflow CRUD (save/load/list/delete via API)
 - [ ] Auto-save on changes
 - [ ] API key management UI
 - [ ] Multiple workflow support

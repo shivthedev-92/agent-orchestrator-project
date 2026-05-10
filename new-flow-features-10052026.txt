@@ -1,0 +1,13 @@
+Application Flow
+
+- User opens to a home page
+    - hero with app feature 
+    - add nav bar with docs, login sections 
+    - share features below
+    - add contact us page 
+
+- User logs in, 
+    - options to create new work flow 
+    - form filling to start a project 
+    - users options to select models connect to gpt apis 
+    - 

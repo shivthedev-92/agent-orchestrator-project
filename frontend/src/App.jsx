@@ -6,6 +6,7 @@ import Inspector from './components/Inspector';
 import RunOverlay from './components/RunOverlay';
 import { TweaksPanel, TweakSection, TweakRadio, TweakSelect, TweakButton, useTweaks } from './components/TweaksPanel';
 import { AGENT_TEMPLATES } from './data/templates';
+import { api } from './api';
 
 const TWEAK_DEFAULTS = {
   "theme": "dark",
@@ -18,7 +19,11 @@ const TWEAK_DEFAULTS = {
 
 let _agentCounter = 1;
 function newAgentId() { return 'a-' + (_agentCounter++).toString(36).padStart(3, '0'); }
-function shortId(id) { return id.toUpperCase().replace('A-', '#'); }
+function shortId(id) {
+  const s = String(id);
+  if (s.startsWith('a-')) return '#' + s.slice(2).toUpperCase();
+  return s.slice(0, 7).toUpperCase();
+}
 
 function makeAgent(tpl, x, y, idOverride) {
   const id = idOverride || newAgentId();
@@ -38,6 +43,10 @@ function makeAgent(tpl, x, y, idOverride) {
     outputSchema: 'freeform',
     x, y,
   };
+}
+
+function isBackendId(id) {
+  return String(id).includes('-');
 }
 
 function buildSeed() {
@@ -85,10 +94,45 @@ function buildSeed() {
   return { agents: [a1, a2, a3, a4, a5, a6, a7], connections: cs };
 }
 
+function mapBackendAgent(a) {
+  return {
+    id: a.id,
+    shortId: shortId(a.id),
+    templateId: a.template_id || '',
+    avatarSeed: a.avatar_seed || '',
+    name: a.name,
+    role: a.role || '',
+    model: a.model,
+    skills: a.skills || [],
+    prompt: a.system_prompt || '',
+    temperature: a.temperature,
+    maxTokens: a.max_tokens,
+    retries: a.retries,
+    outputSchema: a.output_schema || 'freeform',
+    x: a.position_x,
+    y: a.position_y,
+  };
+}
+
+function mapBackendConnection(c) {
+  return {
+    id: c.id,
+    fromId: c.from_agent_id,
+    toId: c.to_agent_id,
+    label: c.label || '',
+  };
+}
+
 export default function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   useEffect(() => { document.documentElement.setAttribute('data-theme', t.theme); }, [t.theme]);
   useEffect(() => { document.documentElement.style.setProperty('--accent-h', t.accentHue); }, [t.accentHue]);
+
+  const [workflowId, setWorkflowId] = useState(null);
+  const [workflowName, setWorkflowName] = useState('Untitled');
+  const [workflowList, setWorkflowList] = useState([]);
+  const [workflowLoading, setWorkflowLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const seed = useMemo(buildSeed, []);
   const [agents, setAgents] = useState(seed.agents);
@@ -97,6 +141,129 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState('all');
   const [dirty, setDirty] = useState(false);
+
+  const initWorkflow = useCallback(async () => {
+    setWorkflowLoading(true);
+    try {
+      const list = await api.listWorkflows();
+      setWorkflowList(list);
+      if (list.length > 0) {
+        await loadWorkflow(list[0].id);
+      } else {
+        setAgents([]);
+        setConnections([]);
+        setWorkflowId(null);
+        setWorkflowName('Untitled');
+        setDirty(false);
+      }
+    } catch {
+      const s = buildSeed();
+      setAgents(s.agents);
+      setConnections(s.connections);
+    }
+    setWorkflowLoading(false);
+  }, []);
+
+  const loadWorkflow = useCallback(async (id) => {
+    setWorkflowLoading(true);
+    const wf = await api.getWorkflow(id);
+    setWorkflowId(wf.id);
+    setWorkflowName(wf.name || 'Untitled');
+    setAgents(wf.agents.map(mapBackendAgent));
+    setConnections(wf.connections.map(mapBackendConnection));
+    setSelectedId(null);
+    setDirty(false);
+    setWorkflowLoading(false);
+  }, []);
+
+  const saveWorkflow = useCallback(async () => {
+    setSaving(true);
+    try {
+      let wfId = workflowId;
+      if (!wfId) {
+        const wf = await api.createWorkflow({ name: workflowName, description: '' });
+        wfId = wf.id;
+        setWorkflowId(wfId);
+      } else {
+        await api.updateWorkflow(wfId, { name: workflowName });
+      }
+
+      for (const a of agents) {
+        const payload = {
+          template_id: a.templateId || '',
+          name: a.name,
+          role: a.role || '',
+          model: a.model,
+          system_prompt: a.prompt || '',
+          temperature: a.temperature,
+          max_tokens: a.maxTokens,
+          retries: a.retries,
+          output_schema: a.outputSchema || 'freeform',
+          skills: a.skills || [],
+          position_x: a.x,
+          position_y: a.y,
+          avatar_seed: a.avatarSeed || '',
+        };
+        if (isBackendId(a.id)) {
+          await api.updateAgent(wfId, a.id, payload);
+        } else {
+          const created = await api.addAgent(wfId, payload);
+          a.id = created.id;
+          a.shortId = shortId(created.id);
+        }
+      }
+
+      for (const c of connections) {
+        const payload = {
+          from_agent_id: c.fromId,
+          to_agent_id: c.toId,
+          label: c.label || '',
+        };
+        if (!isBackendId(c.id)) {
+          await api.addConnection(wfId, payload);
+        }
+      }
+
+      setDirty(false);
+      const list = await api.listWorkflows();
+      setWorkflowList(list);
+    } catch (e) {
+      console.error('Save failed', e);
+    }
+    setSaving(false);
+  }, [workflowId, workflowName, agents, connections]);
+
+  const newWorkflow = useCallback(async () => {
+    setAgents([]);
+    setConnections([]);
+    setWorkflowId(null);
+    setWorkflowName('Untitled');
+    setSelectedId(null);
+    setRunDoneIds([]);
+    setRunStep(0);
+    setLog([]);
+    setDirty(true);
+  }, []);
+
+  const deleteWorkflow = useCallback(async (id) => {
+    await api.deleteWorkflow(id);
+    const list = await api.listWorkflows();
+    setWorkflowList(list);
+    if (id === workflowId) {
+      if (list.length > 0) {
+        await loadWorkflow(list[0].id);
+      } else {
+        newWorkflow();
+      }
+    }
+  }, [workflowId, loadWorkflow, newWorkflow]);
+
+  const switchWorkflow = useCallback(async (id) => {
+    if (id === workflowId) return;
+    await loadWorkflow(id);
+  }, [workflowId, loadWorkflow]);
+
+  useEffect(() => { initWorkflow(); }, [initWorkflow]);
 
   const [running, setRunning] = useState(false);
   const [runStep, setRunStep] = useState(0);
@@ -273,6 +440,16 @@ export default function App() {
         runOrder={runOrder}
         runElapsed={runElapsed}
         dirty={dirty}
+        saving={saving}
+        workflowId={workflowId}
+        workflowName={workflowName}
+        workflowList={workflowList}
+        workflowLoading={workflowLoading}
+        onSave={saveWorkflow}
+        onNew={newWorkflow}
+        onDelete={deleteWorkflow}
+        onSwitch={switchWorkflow}
+        onRename={(n) => { setWorkflowName(n); setDirty(true); }}
       />
 
       <Library
@@ -349,7 +526,7 @@ export default function App() {
           const s = buildSeed();
           setAgents(s.agents); setConnections(s.connections);
           setSelectedId('a-004'); setRunDoneIds([]); setRunStep(0); setLog([]);
-          setDirty(false);
+          setDirty(true);
         }} />
       </TweaksPanel>
     </div>

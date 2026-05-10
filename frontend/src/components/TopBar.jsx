@@ -1,6 +1,33 @@
+import { useState, useRef, useEffect } from 'react';
 import RobotAvatar from './RobotAvatar';
 
-export default function TopBar({ theme, onTheme, running, onRun, onStop, agentCount, connCount, runStep, runOrder, runElapsed, dirty }) {
+export default function TopBar({
+  theme, onTheme, running, onRun, onStop,
+  agentCount, connCount, runStep, runOrder, runElapsed, dirty,
+  saving, workflowId, workflowName, workflowList, workflowLoading,
+  onSave, onNew, onDelete, onSwitch, onRename,
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [nameBuf, setNameBuf] = useState(workflowName);
+  const inputRef = useRef(null);
+
+  useEffect(() => { setNameBuf(workflowName); }, [workflowName]);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  const commitName = () => {
+    setEditing(false);
+    const v = nameBuf.trim();
+    if (v && v !== workflowName) onRename(v);
+    else setNameBuf(workflowName);
+  };
+
   return (
     <header className="topbar">
       <div className="brand">
@@ -12,11 +39,50 @@ export default function TopBar({ theme, onTheme, running, onRun, onStop, agentCo
       </div>
 
       <div className="crumbs">
-        <span>Workspaces</span>
+        <div className="crumb-dropdown-wrap">
+          <span className="crumb-dropdown-trigger" onClick={() => setMenuOpen((o) => !o)}>
+            Workspaces
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: 4 }}><path d="M6 9l6 6 6-6"/></svg>
+          </span>
+          {menuOpen && (
+            <div className="crumb-dropdown">
+              {workflowLoading ? (
+                <div className="crumb-dd-item disabled">Loading...</div>
+              ) : workflowList.length === 0 ? (
+                <div className="crumb-dd-item disabled">No workflows</div>
+              ) : workflowList.map((wf) => (
+                <div
+                  key={wf.id}
+                  className={`crumb-dd-item ${wf.id === workflowId ? 'active' : ''}`}
+                  onClick={() => { onSwitch(wf.id); setMenuOpen(false); }}
+                >
+                  <span className="crumb-dd-name">{wf.name}</span>
+                  <span className="crumb-dd-date">{new Date(wf.updated_at).toLocaleDateString()}</span>
+                </div>
+              ))}
+              <div className="crumb-dd-divider"/>
+              <div className="crumb-dd-item action" onClick={() => { onNew(); setMenuOpen(false); }}>
+                + New workflow
+              </div>
+            </div>
+          )}
+        </div>
         <span className="sep">/</span>
-        <span>Acme Travel</span>
-        <span className="sep">/</span>
-        <span className="cur">Trip planner v3{dirty ? <span style={{ color: 'var(--fg-faint)', marginLeft: 6 }}>•</span> : null}</span>
+        {editing ? (
+          <input
+            ref={inputRef}
+            className="crumb-input"
+            value={nameBuf}
+            onChange={(e) => setNameBuf(e.target.value)}
+            onBlur={commitName}
+            onKeyDown={(e) => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') { setNameBuf(workflowName); setEditing(false); } }}
+          />
+        ) : (
+          <span className="cur" onClick={() => setEditing(true)} title="Rename">
+            {workflowName}
+            {dirty ? <span className="crumb-dirty">*</span> : null}
+          </span>
+        )}
       </div>
 
       <div className="topbar-spacer"/>
@@ -35,6 +101,21 @@ export default function TopBar({ theme, onTheme, running, onRun, onStop, agentCo
       </div>
 
       <div className="topbar-actions">
+        <button className="tb-btn" onClick={onSave} disabled={saving || (!dirty && !!workflowId)} title="Save workflow">
+          <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+        <button className="tb-btn" onClick={onNew} title="New workflow">
+          <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New
+        </button>
+        {workflowId && (
+          <button className="tb-btn" onClick={() => onDelete(workflowId)} title="Delete workflow">
+            <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+        )}
+
+        <span style={{ width: 8 }}/>
         <button className="tb-btn icon" title="Undo">
           <svg width="15" height="15" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7l-3 3"/></svg>
         </button>
