@@ -17,7 +17,7 @@ export default function Library({ query, onQuery, tab, onTab, onStartDrag, onSpa
     return map;
   }, [query, tab]);
 
-  const TABS = ['all', 'Data Pipeline', 'Travel', 'Control Flow', 'Communication', 'Research'];
+  const TABS = ['all', 'Software Development', 'Testing & QA', 'Data Engineering', 'DevOps', 'Scrum & Agile'];
 
   return (
     <aside className="library">

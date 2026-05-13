@@ -31,9 +31,9 @@ export default function TopBar({
   return (
     <header className="topbar">
       <div className="brand">
-        <div className="brand-mark"/>
+        <img src="/andromeda-logo.svg" alt="Andromeda" className="brand-mark"/>
         <div>
-          <div className="brand-name">Orchestra</div>
+          <div className="brand-name">Andromeda<span className="brand-name-dim">.ai</span></div>
         </div>
         <span className="brand-sub mono">v0.4</span>
       </div>

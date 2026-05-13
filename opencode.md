@@ -1,7 +1,7 @@
-# Orchestra.AI — Project Memory
+# Andromeda.ai — Project Memory
 
 ## Vision
-A visual agent orchestration studio where users build workflows with multi-model agents. Both developers and non-developers can drag, drop, configure, and run agent pipelines using different LLM providers.
+A visual agent orchestration studio purpose-built for **tech teams**. Developers, QA engineers, data engineers, DevOps, and Scrum masters build, automate, and run AI-powered workflows that streamline software delivery — from code generation and code review to testing, data pipelines, deployments, and sprint ceremonies.
 
 ## Team
 - Builder: shivthedev
@@ -50,7 +50,11 @@ React SPA (port 5173) → FastAPI (port 8000) → PostgreSQL (port 5432)
 - [x] Design tweaks: draggable floating panel, theme/accent/density/connection toggles
 - [x] Backend scaffolded: FastAPI, SQLAlchemy models, Pydantic schemas, CRUD routers
 - [x] Docker Compose for PostgreSQL
-- [x] Build verified: frontend builds (191KB JS), backend imports with 17 routes
+- [x] Build verified: frontend builds, backend imports with 17 routes
+- [x] Landing page: promotional hero with Get Started / Sign In, nav (Features, Docs, Contact)
+- [x] Auth page: sign in / sign up with email, Google, Apple, forgot password
+- [x] API key onboarding: Bring Your Own Keys for Claude, GPT, Opencode
+- [x] Renamed to Andromeda.ai
 
 ## Roadmap
 
@@ -66,20 +70,48 @@ React SPA (port 5173) → FastAPI (port 8000) → PostgreSQL (port 5432)
 - [ ] WebSocket for live run logs
 - [ ] Token usage tracking
 
-### Phase 4: UX Polish
+### Phase 4: SWE Template Library
+- [ ] Software Development templates (code gen, review, docs)
+- [ ] Testing & QA templates (test case design, E2E orchestration)
+- [ ] Data Engineering templates (pipelines, quality, migrations)
+- [ ] DevOps templates (CI/CD, infra, deployment, monitoring)
+- [ ] Scrum & Agile templates (sprint planning, standups, retros)
+
+### Phase 5: UX Polish
 - [ ] Undo/redo state history
 - [ ] Keyboard shortcuts
 - [ ] Auto-layout, snap-to-grid
 - [ ] Custom agent template creator
 - [ ] Export/import workflows as JSON
 
-### Phase 5: Multi-Tenant (future)
+### Phase 6: Multi-Tenant (future)
 - [ ] JWT auth, organizations, sharing
+
+## Domain Focus
+Orchestra is **verticalized for tech teams** across five domains:
+- **Software Development** — Code gen, review, refactoring, documentation
+- **Testing & QA** — Test case design, unit/E2E execution, bug analysis
+- **Data Engineering** — Pipeline building, quality validation, schema migrations
+- **DevOps** — CI/CD configuration, infra planning, deployment, monitoring
+- **Scrum & Agile** — Sprint planning, standup summaries, retrospectives
 
 ## LLM Strategy
 - **BYOK**: Users bring their own API keys per provider
 - **Providers**: Start with OpenAI + Anthropic, expand later
 - **Models**: Per-agent model selection (Opus 4.5, Sonnet 4.5, Haiku 4.5, GPT, etc.)
+
+## Pending — Next Session
+
+### Connection Enhancements
+- [ ] **Bidirectional connections**: Currently only A→B; need B→A support
+- [ ] **Connection labels/constraints**: Users should be able to write descriptions on relationships, add details about what the connection means, and set constraints on the data/control flow between agents
+- [ ] **Connection inspector**: A UI panel (or expanded existing one) for defining connection metadata — relation type, data contracts, conditions, transforms
+
+### Logo Redesign
+- [ ] **Rebuild logo**: Current SVG spiral galaxy is too small and not aesthetic with the page. Need a proper, polished logo for Andromeda.ai
+
+### Auth Bug
+- [ ] **Google login bypass**: Clicking Google on the auth page immediately goes to the studio page without actual auth. Needs proper OAuth flow or at minimum a proper loading/redirect state
 
 ## Recurring Commands
 ```bash

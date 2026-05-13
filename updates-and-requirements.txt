@@ -1,0 +1,78 @@
+In our current implementation we have the studio login page which has the options to build and orchestrate agents. 
+- please name this app as andromeda.ai depicting our neighboring galaxy 
+to have our workflow clear in process please find the below options 
+    - A promotional login page for end users with hero and login options 
+    - User should have option to sign in, reset password, use google, apple and email for authentication 
+    - user should have the option to assign avatar, which will hugely help them when they are working with others 
+
+once logged in 
+
+    Homepage 
+        - navbar should have, login, docs, features, contact us 
+    
+    Flow - 1 
+        - on logging in user initially will have a chat window where they describe their workflow and automatically the AI will be able to build the flow based on existing agents
+            - to do sequentially the agent first will build a workspace - default- workspace 1 
+            - Inside the workspace, the agent will build the workflow - which will show as thought process in the chat 
+            - post completion user will be directed to our already built agent workflow page. 
+    
+    Flow - 2 
+        - user will click on the create new flow, which will open to studio board 
+        - user will create bots and create relations and trial the flow testing the same 
+        - user's flow will run as console log will be shown to the user 
+        - On completion successful completion notification will be shown to end user 
+
+
+Feature : Plugins and Marketplace 
+
+- User will have a list of DB connectors, logins and applications which will integrate with the agent bots 
+- This will be recommended as well present in a separate page. Each plugin should have the option to configure and authenticate 
+- The added plugin will be used by agents to work on the application 
+- Succesful connection, failure in connection and other details will be shown to end user 
+
+
+Developers: 
+
+- Tools associated with NPM packages libraries 
+- google auth and oauth 
+- db connectors  - postgres, mysql, databricks, snowflake, aws redshift, aws rds, aws s3, azure cosmos, redis 
+- Claude Designer 
+- Opencode 
+- Chatgpt 
+
+Test engineers 
+- selenium 
+- chrome devtools 
+- Jam 
+
+Devops 
+- jenkins 
+- Ansible 
+- terraform 
+- github flows 
+- kubernetes and docker 
+
+Scrum: 
+- Jira
+- Trello 
+- Monday 
+
+Chat 
+- Microsoft Teams 
+- Slack 
+
+Feature : Persitance of Workflows
+
+- user will have option to persist the workflow 
+- user could also share the template with others so they could continue working on the same. 
+
+Feature : user collaboration invite mode. 
+
+- User could invite his team members to collaborate and work 
+- invitations will be authenticated via OTP within app, where the code is shared with other engineer where he will open this agent orchestration tool 
+- lock the agent, if a certain person 1 is working, only when he releases, person 2 will be able to touch that. 
+- Show the person who has joined post invite in a circle with initials 
+
+Feature: Historical logs / version control on flows 
+- user's action will be saved as logs in backend. (only about saving, snapshot saving of his workflow - colleagues workflow etc)
+- user could log to this page and check out his workflow 
