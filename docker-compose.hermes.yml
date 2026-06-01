@@ -1,0 +1,31 @@
+# Hermes Agent — Autonomous AI Agent (disabled by default)
+# Enable with: docker compose -f docker-compose.hermes.yml up -d
+# Requires: mkdir -p ~/.hermes && docker compose -f docker-compose.hermes.yml run --rm hermes setup
+
+services:
+  hermes:
+    image: nousresearch/hermes-agent:latest
+    container_name: andromeda-hermes
+    restart: unless-stopped
+    command: gateway run
+    profiles:
+      - manual
+    ports:
+      - "8642:8642"   # Gateway API (OpenAI-compatible)
+      - "9119:9119"   # Dashboard (when HERMES_DASHBOARD=1)
+    volumes:
+      - ~/.hermes:/opt/data
+      - /var/run/docker.sock:/var/run/docker.sock  # For Docker terminal backend
+    environment:
+      - HERMES_DASHBOARD=1
+      # Uncomment to connect to local Ollama:
+      # - OLLAMA_HOST=http://host.docker.internal:11434
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "2.0"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

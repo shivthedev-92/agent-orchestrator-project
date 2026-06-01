@@ -3,12 +3,14 @@ import TopBar from './components/TopBar';
 import Landing from './components/Landing';
 import AuthPage from './components/AuthPage';
 import ApiKeySetup from './components/ApiKeySetup';
+import ProjectsPage from './components/ProjectsPage';
 import Library from './components/Library';
 import Canvas from './components/Canvas';
 import Inspector from './components/Inspector';
 import RunOverlay from './components/RunOverlay';
 import { TweaksPanel, TweakSection, TweakRadio, TweakSelect, TweakButton, useTweaks } from './components/TweaksPanel';
 import { AGENT_TEMPLATES } from './data/templates';
+import { MODELS } from './data/models';
 import { api } from './api';
 
 const TWEAK_DEFAULTS = {
@@ -38,10 +40,11 @@ function makeAgent(tpl, x, y, idOverride) {
     name: tpl.name,
     role: tpl.role,
     model: tpl.defaultModel,
+    modelProvider: tpl.defaultModelProvider || MODELS.find(m => m.id === tpl.defaultModel)?.provider || 'anthropic',
     skills: [...tpl.skills],
     prompt: tpl.prompt,
-    temperature: 0.4,
-    maxTokens: 2048,
+    temperature: tpl.defaultTemperature ?? 0.4,
+    maxTokens: tpl.defaultMaxTokens ?? 2048,
     retries: 1,
     outputSchema: 'freeform',
     x, y,
@@ -49,7 +52,7 @@ function makeAgent(tpl, x, y, idOverride) {
 }
 
 function isBackendId(id) {
-  return String(id).includes('-');
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(id));
 }
 
 function buildSeed() {
@@ -107,6 +110,7 @@ function mapBackendAgent(a) {
     name: a.name,
     role: a.role || '',
     model: a.model,
+    modelProvider: a.model_provider || MODELS.find(m => m.id === a.model)?.provider || 'anthropic',
     skills: a.skills || [],
     prompt: a.system_prompt || '',
     temperature: a.temperature,
@@ -144,10 +148,11 @@ export default function App() {
   const [workflowLoading, setWorkflowLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const seed = useMemo(buildSeed, []);
-  const [agents, setAgents] = useState(seed.agents);
-  const [connections, setConnections] = useState(seed.connections);
-  const [selectedId, setSelectedId] = useState('a-003');
+  const [agents, setAgents] = useState([]);
+  const [connections, setConnections] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+  const [libraryOpen, setLibraryOpen] = useState(true);
+  const [createAgentTrigger, setCreateAgentTrigger] = useState(0);
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState('all');
   const [dirty, setDirty] = useState(false);
@@ -167,9 +172,8 @@ export default function App() {
         setDirty(false);
       }
     } catch {
-      const s = buildSeed();
-      setAgents(s.agents);
-      setConnections(s.connections);
+      setAgents([]);
+      setConnections([]);
     }
     setWorkflowLoading(false);
   }, []);
@@ -198,12 +202,15 @@ export default function App() {
         await api.updateWorkflow(wfId, { name: workflowName });
       }
 
+      const agentIdMap = {};
+      const savedAgents = [];
       for (const a of agents) {
         const payload = {
           template_id: a.templateId || '',
           name: a.name,
           role: a.role || '',
           model: a.model,
+          model_provider: a.modelProvider || MODELS.find(m => m.id === a.model)?.provider || 'anthropic',
           system_prompt: a.prompt || '',
           temperature: a.temperature,
           max_tokens: a.maxTokens,
@@ -216,32 +223,52 @@ export default function App() {
         };
         if (isBackendId(a.id)) {
           await api.updateAgent(wfId, a.id, payload);
+          savedAgents.push(a);
         } else {
           const created = await api.addAgent(wfId, payload);
-          a.id = created.id;
-          a.shortId = shortId(created.id);
+          agentIdMap[a.id] = created.id;
+          savedAgents.push({ ...a, id: created.id, shortId: shortId(created.id) });
         }
       }
 
+      const savedConnections = [];
       for (const c of connections) {
-        const payload = {
-          from_agent_id: c.fromId,
-          to_agent_id: c.toId,
-          label: c.label || '',
+        const mappedConnection = {
+          ...c,
+          fromId: agentIdMap[c.fromId] || c.fromId,
+          toId: agentIdMap[c.toId] || c.toId,
         };
-        if (!isBackendId(c.id)) {
-          await api.addConnection(wfId, payload);
+        if (isBackendId(c.id)) {
+          savedConnections.push(mappedConnection);
+        } else {
+          const created = await api.addConnection(wfId, {
+            from_agent_id: mappedConnection.fromId,
+            to_agent_id: mappedConnection.toId,
+            label: c.label || '',
+          });
+          savedConnections.push(mapBackendConnection(created));
         }
       }
 
+      setAgents(savedAgents);
+      setConnections(savedConnections);
+      setSelectedId((id) => agentIdMap[id] || id);
       setDirty(false);
       const list = await api.listWorkflows();
       setWorkflowList(list);
+      return wfId;
     } catch (e) {
       console.error('Save failed', e);
+      return null;
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   }, [workflowId, workflowName, agents, connections]);
+
+  const handleNewAgent = useCallback(() => {
+    setLibraryOpen(true);
+    setCreateAgentTrigger((n) => n + 1);
+  }, []);
 
   const newWorkflow = useCallback(async () => {
     setAgents([]);
@@ -281,7 +308,11 @@ export default function App() {
   const [runDoneIds, setRunDoneIds] = useState([]);
   const [runElapsed, setRunElapsed] = useState(0);
   const [log, setLog] = useState([]);
+  const [workflowInput, setWorkflowInput] = useState('');
+  const [backendRunning, setBackendRunning] = useState(false);
   const runRef = useRef({ raf: 0, t0: 0, stepStart: 0 });
+  const backendPollRef = useRef(null);
+  const backendLogIdsRef = useRef(new Set());
 
   const runOrder = useMemo(() => {
     const incoming = {}; agents.forEach(a => incoming[a.id] = 0);
@@ -301,16 +332,73 @@ export default function App() {
     return visited;
   }, [agents, connections]);
 
-  const startRun = () => {
+  const stopBackendPolling = () => {
+    if (backendPollRef.current) {
+      clearInterval(backendPollRef.current);
+      backendPollRef.current = null;
+    }
+  };
+
+  const pollBackendRun = (runId) => {
+    stopBackendPolling();
+    const poll = async () => {
+      try {
+        const backendRun = await api.getRun(runId);
+        for (const entry of backendRun.logs || []) {
+          if (entry.status === 'running' || backendLogIdsRef.current.has(entry.id)) continue;
+          backendLogIdsRef.current.add(entry.id);
+          const output = entry.output_data?.result || entry.error || 'No output returned.';
+          const suffix = entry.tokens_used ? ` (${entry.tokens_used} tokens)` : '';
+          pushLog(entry.agent_name || 'agent', `${output}${suffix}`, entry.status === 'failed' ? 'err' : 'ok');
+        }
+        if (backendRun.status === 'completed' || backendRun.status === 'failed') {
+          stopBackendPolling();
+          setBackendRunning(false);
+          pushLog('orchestrator', backendRun.status === 'completed' ? 'backend run complete' : `backend run failed: ${backendRun.error || 'unknown error'}`, backendRun.status === 'completed' ? 'ok' : 'err');
+        }
+      } catch (e) {
+        stopBackendPolling();
+        setBackendRunning(false);
+        pushLog('orchestrator', `could not read backend logs: ${e.message}`, 'err');
+      }
+    };
+    backendPollRef.current = setInterval(poll, 700);
+    poll();
+  };
+
+  const startRun = async () => {
+    stopBackendPolling();
+    setLog([]);
+    backendLogIdsRef.current = new Set();
+    if (agents.length === 0) {
+      pushLog('orchestrator', 'add at least one agent before running the workflow', 'err');
+      return;
+    }
+
+    pushLog('orchestrator', dirty ? 'saving workflow before run' : 'checking saved workflow', 'ok');
+    const savedWorkflowId = await saveWorkflow();
+    if (!savedWorkflowId) {
+      pushLog('orchestrator', 'could not save workflow; run cancelled', 'err');
+      return;
+    }
+
     setRunning(true);
     setRunStep(0);
     setRunProgress(0);
     setRunDoneIds([]);
-    setLog([]);
     runRef.current.t0 = performance.now();
     runRef.current.stepStart = performance.now();
-    pushLog('orchestrator', 'starting workflow', 'ok');
+    pushLog('orchestrator', 'starting backend workflow', 'ok');
+    setBackendRunning(true);
+    api.startRun(savedWorkflowId, apiKeys, workflowInput).then((backendRun) => {
+      pollBackendRun(backendRun.id);
+    }).catch((e) => {
+      setBackendRunning(false);
+      pushLog('orchestrator', `backend run failed: ${e.message}`, 'err');
+    });
   };
+  useEffect(() => () => stopBackendPolling(), []);
+
   const stopRun = () => {
     setRunning(false);
     cancelAnimationFrame(runRef.current.raf);
@@ -443,7 +531,7 @@ export default function App() {
   if (page === 'auth') {
     return (
       <AuthPage
-        onAuth={(d) => { setUser(d); setPage(apiKeys ? 'studio' : 'apikeys'); }}
+        onAuth={(d) => { setUser(d); setPage(apiKeys ? 'projects' : 'apikeys'); }}
         onBack={() => setPage('landing')}
       />
     );
@@ -452,8 +540,25 @@ export default function App() {
   if (page === 'apikeys') {
     return (
       <ApiKeySetup
-        onComplete={(keys) => { setApiKeys(keys); setPage('studio'); }}
-        onSkip={() => setPage('studio')}
+        onComplete={(keys) => { setApiKeys(keys); setPage('projects'); }}
+        onSkip={() => setPage('projects')}
+      />
+    );
+  }
+
+  if (page === 'projects') {
+    return (
+      <ProjectsPage
+        onSelect={(id, name) => {
+          setWorkflowId(id);
+          setWorkflowName(name);
+          loadWorkflow(id);
+          setPage('studio');
+        }}
+        onLogout={() => {
+          setUser(null);
+          setPage('landing');
+        }}
       />
     );
   }
@@ -479,9 +584,11 @@ export default function App() {
         workflowLoading={workflowLoading}
         onSave={saveWorkflow}
         onNew={newWorkflow}
+        onNewAgent={handleNewAgent}
         onDelete={deleteWorkflow}
         onSwitch={switchWorkflow}
         onRename={(n) => { setWorkflowName(n); setDirty(true); }}
+        onHome={() => { setPage('projects'); }}
       />
 
       <Library
@@ -489,6 +596,8 @@ export default function App() {
         tab={tab} onTab={setTab}
         onStartDrag={onStartDrag}
         onSpawnAt={spawnAt}
+        open={libraryOpen} onToggle={() => setLibraryOpen((o) => !o)}
+        createTrigger={createAgentTrigger}
       />
 
       <Canvas
@@ -509,6 +618,9 @@ export default function App() {
       />
 
       <Inspector
+        agents={agents}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
         agent={selectedAgent}
         onChange={(patch) => updateAgent(selectedAgent.id, patch)}
         onDelete={() => deleteAgent(selectedAgent.id)}
@@ -523,6 +635,9 @@ export default function App() {
         runStep={runStep}
         runElapsed={runElapsed}
         log={log}
+        backendRunning={backendRunning}
+        workflowInput={workflowInput}
+        onWorkflowInput={setWorkflowInput}
       />
 
       <TweaksPanel>

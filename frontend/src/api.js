@@ -11,6 +11,7 @@ async function request(method, path, body = null) {
     const err = await res.text();
     throw new Error(`${res.status}: ${err}`);
   }
+  if (res.status === 204) return null;
   return res.json();
 }
 
@@ -32,7 +33,7 @@ export const api = {
   deleteConnection: (workflowId, connId) => request('DELETE', `/workflows/${workflowId}/connections/${connId}`),
 
   // Runs
-  startRun: (workflowId) => request('POST', `/workflows/${workflowId}/run`),
+  startRun: (workflowId, apiKeys = {}, inputText = '') => request('POST', `/workflows/${workflowId}/run`, { api_keys: apiKeys, input_text: inputText }),
   getRuns: (workflowId) => request('GET', `/workflows/${workflowId}/runs`),
   getRun: (runId) => request('GET', `/runs/${runId}`),
 };

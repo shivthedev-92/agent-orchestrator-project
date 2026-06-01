@@ -4,6 +4,11 @@ from uuid import UUID
 from pydantic import BaseModel
 
 
+class RunStartRequest(BaseModel):
+    api_keys: dict[str, str] | None = None
+    input_text: str = ""
+
+
 class RunLogResponse(BaseModel):
     id: UUID
     run_id: UUID

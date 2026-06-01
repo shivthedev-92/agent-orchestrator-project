@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.workflow import Workflow
@@ -29,7 +30,9 @@ async def create_workflow(data: WorkflowCreate, db: AsyncSession = Depends(get_d
 @router.get("/{workflow_id}", response_model=WorkflowDetail)
 async def get_workflow(workflow_id: UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(Workflow).where(Workflow.id == workflow_id)
+        select(Workflow)
+        .options(selectinload(Workflow.agents), selectinload(Workflow.connections))
+        .where(Workflow.id == workflow_id)
     )
     wf = result.scalar_one_or_none()
     if not wf:

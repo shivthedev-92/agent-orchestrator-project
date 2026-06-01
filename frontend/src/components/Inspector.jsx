@@ -2,10 +2,37 @@ import RobotAvatar from './RobotAvatar';
 import { MODELS } from '../data/models';
 import { SKILL_BANK } from '../data/skills';
 
-export default function Inspector({ agent, onChange, onDelete, onChangeAvatarSeed, connectionsCount }) {
+export default function Inspector({ agents, selectedId, onSelect, agent, onChange, onDelete, onChangeAvatarSeed, connectionsCount }) {
+  const projectAgents = (
+    <div className="project-agents">
+      <div className="project-agents-head">
+        <span>Project Agents</span>
+        <span className="project-agents-count mono">{agents.length}</span>
+      </div>
+      <div className="project-agents-list">
+        {agents.length === 0 ? (
+          <div className="project-agents-empty">No agents added to this project yet.</div>
+        ) : agents.map((item) => (
+          <button
+            key={item.id}
+            className={`project-agent ${selectedId === item.id ? 'active' : ''}`}
+            onClick={() => onSelect(item.id)}
+          >
+            <RobotAvatar seed={item.avatarSeed} size={28}/>
+            <span className="project-agent-meta">
+              <span className="project-agent-name">{item.name}</span>
+              <span className="project-agent-role">{item.role || 'No role assigned'}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   if (!agent) {
     return (
       <aside className="inspector">
+        {projectAgents}
         <div className="insp-empty">
           <div>
             <div className="glyph">
@@ -34,6 +61,7 @@ export default function Inspector({ agent, onChange, onDelete, onChangeAvatarSee
 
   return (
     <aside className="inspector">
+      {projectAgents}
       <div className="insp-head">
         <div className="av"><RobotAvatar seed={agent.avatarSeed} size={48}/></div>
         <div className="id">
@@ -66,10 +94,10 @@ export default function Inspector({ agent, onChange, onDelete, onChangeAvatarSee
         <div className="fld">
           <div className="fld-label"><span>Model</span></div>
           <div className="model-grid">
-            {MODELS.slice(0, 6).map(m => (
+            {MODELS.map(m => (
               <button key={m.id}
                       className={`model-tile ${agent.model === m.id ? 'active' : ''}`}
-                      onClick={() => onChange({ model: m.id })}>
+                      onClick={() => onChange({ model: m.id, modelProvider: m.provider })}>
                 <div className="mt-name">{m.name}</div>
                 <div className="mt-meta">{m.meta}</div>
               </button>
