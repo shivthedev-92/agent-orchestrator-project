@@ -1,209 +1,168 @@
-# Orchestra.AI — Agent Orchestration Studio
+# Andromeda.ai - Visual Agent Orchestration Studio
 
-> **Build visual agent workflows with multi-model AI.** Drag, drop, configure, and run agent pipelines using different LLM providers — all from a beautiful studio interface.
+Andromeda.ai is a visual workflow studio for building and running connected AI agents. It combines a React canvas, reusable agent templates, project persistence, run logs, and provider-aware LLM execution.
 
----
+The current version supports real workflow execution through OpenAI, Anthropic, Ollama, and an OpenCode-compatible endpoint. It also includes a focused file-reading and translation workflow for local document experiments.
 
-## Overview
+## Current Capabilities
 
-Orchestra.AI is a visual agent orchestration studio that lets you build workflows with agents powered by different AI models. Instead of being locked into a single provider, you can mix models from OpenAI, Anthropic, and more within the same workflow — each agent configured with its own model, prompt, skills, and parameters.
+- Create, open, save, and delete workflow projects.
+- Add agents from templates or create custom agents.
+- Configure an agent model, prompt, skills, tools, and visual identity.
+- Connect agents on the canvas and execute them in dependency order.
+- View current project agents from the left pane.
+- Use the right pane tabs to create agents, browse existing agents, and inspect the marketplace.
+- Enter workflow input and inspect live run logs from the terminal docked below the canvas.
+- Store workflow structure, run state, logs, and token usage in PostgreSQL.
+- Use bring-your-own-key OpenAI and Anthropic execution.
+- Run the verified local Ollama model `qwen3:8b` without an API key.
 
-Whether you're building a data pipeline, planning a trip, or automating a multi-step research workflow, Orchestra.AI gives you a canvas to design it visually and an engine to execute it.
+## Studio Layout
 
-### Target Audience
-
-- **Developers** — build complex agent pipelines with fine-grained control
-- **Non-developers** — configure and run workflows through a visual interface
-
----
-
-## Features
-
-### Current (Phase 1 ✓)
-
-| Feature | Description |
-|---|---|
-| **Visual Canvas** | Pan/zoom canvas with drag-and-drop agent placement |
-| **Agent Cards** | Draggable cards with avatar, name, model, skills, status |
-| **Connections** | Route messages between agents with 3 connection styles (curved, stepped, straight) |
-| **Inspector Panel** | Full agent configuration — model, system prompt, skills, temperature, max tokens, retries, I/O schema |
-| **Agent Library** | 15+ pre-built agent templates across 5 categories (Data Pipeline, Travel, Control Flow, Communication, Research) |
-| **Generative Avatars** | Deterministic SVG robot avatars — randomized per agent, swappable in inspector |
-| **Run Simulation** | Topologically-sorted execution with animated progress, live log overlay, and per-agent status |
-| **Minimap** | Bird's-eye view of the canvas with viewport indicator |
-| **Theme System** | Dark/light mode with customizable accent color (6 options) |
-| **Design Tweaks** | Draggable floating panel for live theme, density, and canvas tweaks |
-
-### Upcoming
-
-- **Phase 2**: Save/load workflows, auto-save, API key management, multiple workflows
-- **Phase 3**: Real LLM execution (OpenAI + Anthropic via BYOK), WebSocket live logs, token tracking
-- **Phase 4**: Undo/redo, keyboard shortcuts, auto-layout, snap-to-grid, workflow export/import
-- **Phase 5**: Auth, organizations, sharing
-
----
-
-## Tech Stack
-
-| Layer | Technology | Purpose |
-|---|---|---|
-| **Frontend** | React 18, Vite 6 | Modern SPA with HMR and fast builds |
-| **Backend** | Python 3.13, FastAPI | Async REST API with auto-generated OpenAPI docs |
-| **Database** | PostgreSQL 16, SQLAlchemy 2.0 | Relational storage with JSONB for flexible configs |
-| **Containerization** | Docker Compose | Local development environment |
-
-### Architecture
-
-```
-┌─────────────────────────────────────────────────────┐
-│  React SPA (localhost:5173)                          │
-│  ┌──────────┐ ┌──────────┐ ┌────────────────────┐   │
-│  │  Library │ │  Canvas  │ │   Inspector Panel  │   │
-│  └────┬─────┘ └────┬─────┘ └────────────────────┘   │
-│       │            │                                 │
-│       └───────┬────┘                                 │
-│           HTTP REST + WebSocket                      │
-└───────────────┼─────────────────────────────────────┘
-                │
-┌───────────────┼─────────────────────────────────────┐
-│  FastAPI Server (localhost:8000)                     │
-│  ┌──────────┐ ┌──────────────┐ ┌─────────────────┐  │
-│  │ REST API │ │  WebSocket   │ │  LLM Gateway    │  │
-│  │  CRUD    │ │  (run logs)  │ │  (BYOK proxy)   │  │
-│  └────┬─────┘ └──────────────┘ └────────┬────────┘  │
-│       │                                 │           │
-│  ┌────┴────────────────┐  ┌─────────────┴────────┐  │
-│  │  Execution Engine   │  │  OpenAI · Anthropic   │  │
-│  │  (topological sort, │  │  · Google · Local     │  │
-│  │   retry, context)   │  │                       │  │
-│  └─────────────────────┘  └───────────────────────┘  │
-│       │                                               │
-│  ┌────┴──────────────────────────────────────────┐   │
-│  │  PostgreSQL (port 5432)                        │   │
-│  │  workflows · agents · connections · runs       │   │
-│  └───────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────┘
+```text
++-------------------------------------------------------------+
+| Top bar: project, save, run, provider keys                   |
++----------------+--------------------------+------------------+
+| Left pane      | Workflow canvas          | Right pane       |
+|                |                          |                  |
+| Project agents | Nodes and connections    | Create Agent     |
+| Agent inspector|                          | My Agents        |
+|                +--------------------------+ Marketplace      |
+|                | Run terminal             |                  |
+|                | Input | Backend output   |                  |
++----------------+--------------------------+------------------+
 ```
 
----
+The terminal belongs to the center workspace only. The left and right panes remain visible while a workflow runs.
+
+## Execution Flow
+
+1. A user adds agents and connects them on the canvas.
+2. `Save` persists agents and connections to the backend.
+3. `Run` first saves the current canvas, then starts a backend run with the terminal input and configured provider keys.
+4. The backend topologically sorts connected agents so upstream work completes before downstream work begins.
+5. Each agent receives a structured JSON envelope containing the workflow input, available files, and upstream outputs.
+6. The executor runs deterministic local skills where supported, or sends the prompt to the selected LLM provider.
+7. Logs and token usage are persisted with the run.
+8. The frontend polls the backend run endpoint and displays progress in the docked terminal.
+
+The application currently uses REST polling for run updates. WebSockets are not implemented.
+
+## File Reading And Translation Demo
+
+The current prototype includes two exact skill names with special runtime behavior:
+
+- `Read`: reads files from `trial-folder/` and returns their contents without calling an LLM.
+- `Translate`: asks the selected model for structured translated files, extracts the translated text, and writes timestamped results to `trial-folder/output/`.
+
+Example workflow:
+
+```text
+Reading Agent [Read] -> Translation Agent [Translate]
+```
+
+To try it:
+
+1. Place a source document in `trial-folder/`, such as `trial-folder/sample-english-document.txt`.
+2. Create a reading agent with the `Read` skill.
+3. Create a translation agent with the `Translate` skill and select `qwen3:8b` for local execution.
+4. Connect the reading agent to the translation agent.
+5. Run the workflow and inspect the bottom terminal.
+6. Find generated files under `trial-folder/output/`.
+
+`trial-folder/output/` is ignored by Git. File access is intentionally constrained to the project trial folder while this feature is still a prototype.
+
+## Model Providers
+
+| Provider | Authentication | Runtime notes |
+| --- | --- | --- |
+| OpenAI | API key supplied at run time | Uses the OpenAI chat completions API. Available models depend on the account key. |
+| Anthropic | API key supplied at run time | Uses the Anthropic messages API. Available models depend on the account key. |
+| Ollama | No API key | Uses native Ollama `/api/chat`. Local `qwen3:8b` has been verified with thinking disabled for workflow output. |
+| OpenCode-compatible | Optional API key and base URL | Uses a compatible chat completions endpoint. Without a configured key, the current implementation falls back to simulated output. |
+
+The model dropdown currently includes Claude options, `gpt-4o`, `gpt-4o-mini`, and `qwen3:8b`. On the local Ollama instance used for development, `qwen3:8b` is the installed and tested model.
+
+Provider keys are kept in browser storage and sent with run requests. The backend does not yet provide a production secrets vault.
+
+## Architecture
+
+```text
+React + Vite frontend
+        |
+        | REST API and run polling
+        v
+FastAPI backend ---------> PostgreSQL
+        |
+        +---------------> OpenAI API
+        +---------------> Anthropic API
+        +---------------> Ollama /api/chat
+        +---------------> OpenCode-compatible endpoint
+```
+
+The default executor runs agents in the backend process. An optional Docker executor scaffold is also included for later isolated per-agent execution work.
 
 ## Project Structure
 
-```
+```text
 agent-orchestrator-project/
-│
-├── frontend/                          # React + Vite SPA
-│   ├── index.html                     # Entry HTML
-│   ├── package.json                   # Dependencies & scripts
-│   ├── vite.config.js                 # Vite config + API proxy
-│   └── src/
-│       ├── main.jsx                   # React DOM entry point
-│       ├── App.jsx                    # Main app (state, run engine)
-│       ├── api.js                     # REST API client
-│       ├── styles.css                 # Full theme system (800+ lines)
-│       ├── components/
-│       │   ├── TopBar.jsx             # Header: branding, run controls, theme toggle
-│       │   ├── Library.jsx            # Left sidebar: agent template search & drag
-│       │   ├── Canvas.jsx             # Center: pan/zoom canvas, agent cards, connections
-│       │   ├── Inspector.jsx          # Right panel: agent property editor
-│       │   ├── RunOverlay.jsx         # Run progress bar + log viewer
-│       │   ├── TweaksPanel.jsx        # Draggable floating design tweaks
-│       │   └── RobotAvatar.jsx        # Deterministic generative SVG avatars
-│       └── data/
-│           ├── templates.js           # 15 agent template definitions
-│           ├── models.js              # Model catalog + provider mapping
-│           └── skills.js              # 30+ skill definitions
-│
-├── backend/                           # FastAPI server
-│   ├── requirements.txt
-│   ├── Dockerfile
-│   └── app/
-│       ├── main.py                    # FastAPI app factory, CORS, lifespan
-│       ├── config.py                  # Settings (env-based via pydantic-settings)
-│       ├── database.py                # Async SQLAlchemy engine + session
-│       ├── models/
-│       │   ├── workflow.py            # workflows table
-│       │   ├── agent.py               # agents table
-│       │   ├── connection.py          # connections table
-│       │   └── run.py                 # runs + run_logs tables
-│       ├── schemas/
-│       │   ├── workflow.py            # WorkflowCreate/Update/Response
-│       │   ├── agent.py               # AgentCreate/Update/Response
-│       │   ├── connection.py          # ConnectionCreate/Response
-│       │   └── run.py                 # RunResponse, RunLogResponse
-│       ├── routers/
-│       │   ├── workflows.py           # CRUD /api/workflows
-│       │   ├── agents.py              # CRUD agents within workflows
-│       │   ├── connections.py         # CRUD connections
-│       │   └── runs.py                # Start run, list runs, get run
-│       └── services/
-│           ├── workflow.py            # Graph builder + topological sort
-│           └── execution.py           # Async execution engine (LLM stub ready)
-│
-├── docker-compose.yml                 # PostgreSQL + backend containers
-├── opencode.md                        # Project memory for AI pair programming
-└── README.md                          # This file
+|-- frontend/
+|   |-- src/
+|   |   |-- components/       # Studio, projects page, agent UI, terminal
+|   |   |-- data/             # Models, templates, marketplace data
+|   |   |-- services/         # Backend API client
+|   |   `-- styles/           # Application styling
+|   `-- package.json
+|-- backend/
+|   |-- app/
+|   |   |-- api/              # Workflow, agent, connection, and run routes
+|   |   |-- services/         # Execution, LLM gateway, Docker executor
+|   |   |-- models.py         # SQLAlchemy models
+|   |   `-- schemas.py        # Request and response schemas
+|   |-- agent_runner/         # Optional container runner
+|   `-- requirements.txt
+|-- trial-folder/             # Local file-workflow inputs
+|-- docker-compose.yml        # PostgreSQL and backend
+|-- docker-compose.hermes.yml # Optional Hermes services
+`-- README.md
 ```
 
----
-
-## Setup Guide
+## Quick Start
 
 ### Prerequisites
 
-- **Node.js** ≥ 18 (tested with 20)
-- **Python** ≥ 3.12 (tested with 3.13)
-- **PostgreSQL** 16 (or Docker)
-- **npm** or yarn
+- Node.js and npm
+- Python 3.11+
+- PostgreSQL, or Docker Compose
+- Ollama only if using local `qwen3:8b`
 
-### Quick Start (Frontend Only)
-
-The frontend works standalone with built-in seed data and a simulated run engine — no database or backend needed.
+### Start PostgreSQL And Backend With Docker
 
 ```bash
-# 1. Navigate to the project
-cd /home/shivthedev/projects/agent-orchestrator-project/frontend
-
-# 2. Install dependencies
-npm install
-
-# 3. Start the dev server
-npm run dev
-```
-
-Open **http://localhost:5173** in your browser.
-
-### Full Stack (with Docker)
-
-```bash
-# 1. Start PostgreSQL + backend
-cd /home/shivthedev/projects/agent-orchestrator-project
 docker compose up -d
-
-# 2. Start frontend
-cd frontend && npm install && npm run dev
 ```
 
-### Full Stack (without Docker)
+This starts PostgreSQL on host port `5434` and the FastAPI backend on `http://localhost:8000`.
 
-#### Backend Setup
+### Start Backend Manually
+
+Set `DATABASE_URL` for your PostgreSQL environment, then install dependencies and run FastAPI:
 
 ```bash
-# 1. Create a PostgreSQL database
-psql -U postgres -c "CREATE USER orchestra WITH PASSWORD 'orchestra';"
-psql -U postgres -c "CREATE DATABASE orchestra OWNER orchestra;"
-
-# 2. Install Python dependencies
 cd backend
+python3 -m venv .venv
+. .venv/bin/activate
 pip install -r requirements.txt
-
-# 3. Start the server
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-The API will be available at **http://localhost:8000**. Auto-generated docs at **http://localhost:8000/docs**.
+Example Docker database URL when running the backend outside Docker:
 
-#### Frontend Setup
+```bash
+export DATABASE_URL='postgresql+asyncpg://orchestra:orchestra@localhost:5434/orchestra'
+```
+
+### Start Frontend
 
 ```bash
 cd frontend
@@ -211,94 +170,78 @@ npm install
 npm run dev
 ```
 
-The Vite dev server proxies `/api` requests to the backend automatically.
+Open `http://localhost:5173`.
 
----
-
-## API Reference
-
-Once the backend is running, visit **http://localhost:8000/docs** for the interactive Swagger UI.
-
-### Core Endpoints
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/workflows` | List all workflows |
-| `POST` | `/api/workflows` | Create a workflow |
-| `GET` | `/api/workflows/{id}` | Get workflow with agents + connections |
-| `PUT` | `/api/workflows/{id}` | Update workflow |
-| `DELETE` | `/api/workflows/{id}` | Delete workflow |
-| `POST` | `/api/workflows/{id}/agents` | Add agent to workflow |
-| `PUT` | `/api/workflows/{id}/agents/{aid}` | Update agent |
-| `DELETE` | `/api/workflows/{id}/agents/{aid}` | Delete agent |
-| `POST` | `/api/workflows/{id}/connections` | Add connection |
-| `DELETE` | `/api/workflows/{id}/connections/{cid}` | Delete connection |
-| `POST` | `/api/workflows/{id}/run` | Start a workflow run |
-| `GET` | `/api/workflows/{id}/runs` | List runs for a workflow |
-| `GET` | `/api/runs/{id}` | Get run details with logs |
-| `GET` | `/api/health` | Health check |
-
----
-
-## Roadmap
-
-### Phase 1 ✓ — Foundation (Current)
-Frontend SPA, backend scaffold, DB models, Docker Compose.
-
-### Phase 2 — Frontend ↔ Backend Integration
-Workflow CRUD, auto-save, API key management, multiple workflow support.
-
-### Phase 3 — Real LLM Execution *(highest priority)*
-BYOK provider integration (OpenAI + Anthropic), real execution engine, WebSocket live logs, token tracking.
-
-### Phase 4 — UX Polish
-Undo/redo, keyboard shortcuts, auto-layout, snap-to-grid, workflow export/import, custom templates.
-
-### Phase 5 — Multi-Tenant (future)
-JWT auth, organizations, sharing, usage analytics.
-
----
-
-## LLM Integration Strategy
-
-- **BYOK (Bring Your Own Key)**: Users configure their own API keys per provider
-- **Starting providers**: OpenAI (GPT models) + Anthropic (Claude models)
-- **Per-agent model selection**: Each agent picks its model independently within a workflow
-- **Unified message format**: Standardized context passing between agents regardless of underlying model
-
----
-
-## Development Commands
+### Start Ollama For Local Runs
 
 ```bash
-# Frontend
-cd frontend
-npm run dev          # Start dev server (localhost:5173)
-npm run build        # Production build → dist/
-npm run preview      # Preview production build
-
-# Backend
-cd backend
-uvicorn app.main:app --reload    # Dev server (localhost:8000)
-
-# Database (Docker)
-docker compose up -d             # Start PostgreSQL
-docker compose down              # Stop
-psql -h localhost -U orchestra -d orchestra  # Connect
+ollama serve
+ollama pull qwen3:8b
+curl http://localhost:11434/api/tags
 ```
 
----
+Select `qwen3:8b` on an agent to run through the local Ollama service.
 
-## Design System
+## API Overview
 
-- **Theme**: Dark/light with CSS custom properties (OKLCH color space)
-- **Typography**: Geist (sans-serif) + Geist Mono (monospace) via Google Fonts
-- **Accent**: 6 preset hues (Iris, Cobalt, Mint, Amber, Magenta, Cyan)
-- **Icons**: Inline SVG throughout (no icon library dependency)
-- **Layout**: CSS Grid (280px sidebar | 1fr canvas | 340px inspector)
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | Backend health check |
+| `GET` | `/api/workflows` | List projects |
+| `POST` | `/api/workflows` | Create a project |
+| `GET` | `/api/workflows/{id}` | Load project details |
+| `PUT` | `/api/workflows/{id}` | Update a project |
+| `DELETE` | `/api/workflows/{id}` | Delete a project |
+| `POST` | `/api/workflows/{id}/agents` | Add an agent |
+| `PUT` | `/api/agents/{id}` | Update an agent |
+| `DELETE` | `/api/agents/{id}` | Delete an agent |
+| `POST` | `/api/workflows/{id}/connections` | Add a connection |
+| `DELETE` | `/api/connections/{id}` | Delete a connection |
+| `POST` | `/api/workflows/{id}/runs` | Start a run |
+| `GET` | `/api/runs/{id}` | Poll run status and logs |
 
----
+Example run body:
 
-## Contributing
+```json
+{
+  "input_text": "Translate the available document into French.",
+  "api_keys": {
+    "openai": "",
+    "anthropic": ""
+  }
+}
+```
 
-This project is under active development. See `opencode.md` for the current sprint focus and `docker-compose.yml` for the development environment setup.
+## Known Prototype Limits
+
+- Authentication and social login controls are placeholders.
+- Run updates use polling rather than WebSockets.
+- Provider keys are browser-managed, not stored in a backend secrets vault.
+- `Run` auto-saves the canvas, but arbitrary edits are not continuously synchronized.
+- Generic file tools are not implemented; the `Read` and `Translate` behaviors are constrained prototypes.
+- Undo, redo, export, settings, shared marketplace publishing, and collaboration are not complete.
+- The frontend still includes visual run animation while backend logs provide the authoritative execution result.
+- The Docker executor is optional groundwork; the default executor is in-process.
+
+## Development Checks
+
+```bash
+cd frontend
+npm run build
+
+cd ../backend
+python3 -m compileall app agent_runner
+```
+
+For a basic live check:
+
+```bash
+curl http://localhost:8000/health
+curl http://localhost:11434/api/tags
+```
+
+## Supporting Notes
+
+- `SUMMARY.md` contains a broader project snapshot and should be treated as supplementary notes.
+- `opencode.md` contains the original implementation brief and historical design direction.
+- The current README documents the implemented workflow as of June 1, 2026.
