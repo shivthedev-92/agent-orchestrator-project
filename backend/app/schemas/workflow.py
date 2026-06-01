@@ -3,6 +3,9 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from app.schemas.agent import AgentResponse
+from app.schemas.connection import ConnectionResponse
+
 
 class WorkflowBase(BaseModel):
     name: str
@@ -27,5 +30,5 @@ class WorkflowResponse(WorkflowBase):
 
 
 class WorkflowDetail(WorkflowResponse):
-    agents: list["AgentResponse"] = []
-    connections: list["ConnectionResponse"] = []
+    agents: list[AgentResponse] = []
+    connections: list[ConnectionResponse] = []
