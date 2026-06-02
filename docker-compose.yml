@@ -24,6 +24,9 @@ services:
     environment:
       DATABASE_URL: "postgresql+asyncpg://orchestra:orchestra@db:5432/orchestra"
       REDIS_URL: "redis://redis:6379/0"
+      WORKFLOW_FILES_DIR: "/workspace/trial-folder"
+    volumes:
+      - ./trial-folder:/workspace/trial-folder
     depends_on:
       - db
       - redis
