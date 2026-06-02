@@ -14,6 +14,7 @@ The current version supports real workflow execution through OpenAI, Anthropic, 
 - Use the right pane tabs to create agents, browse existing agents, and inspect the marketplace.
 - Enter workflow input and inspect live run logs from the terminal docked below the canvas.
 - Store workflow structure, run state, logs, and token usage in PostgreSQL.
+- Relay live run events through optional Redis Streams with automatic PostgreSQL fallback.
 - Use bring-your-own-key OpenAI and Anthropic execution.
 - Run the verified local Ollama model `qwen3:8b` without an API key.
 
@@ -44,9 +45,10 @@ The terminal belongs to the center workspace only. The left and right panes rema
 5. Each agent receives a structured JSON envelope containing the workflow input, available files, and upstream outputs.
 6. The executor runs deterministic local skills where supported, or sends the prompt to the selected LLM provider.
 7. Logs and token usage are persisted with the run.
-8. The frontend polls the backend run endpoint and displays progress in the docked terminal.
+8. After each durable commit, the backend publishes a bounded Redis Stream event when Redis is available.
+9. The frontend polls the run-events API and displays progress in the docked terminal. If Redis is unavailable, it falls back to persisted PostgreSQL logs.
 
-The application currently uses REST polling for run updates. WebSockets are not implemented.
+The application currently uses REST polling for run updates. Redis Streams reduces relay overhead, but WebSockets and Server-Sent Events are not implemented.
 
 ## File Reading And Translation Demo
 
@@ -92,7 +94,9 @@ React + Vite frontend
         |
         | REST API and run polling
         v
-FastAPI backend ---------> PostgreSQL
+FastAPI backend ---------> PostgreSQL (durable state and logs)
+        |
+        +---------------> Redis Streams (optional live event relay)
         |
         +---------------> OpenAI API
         +---------------> Anthropic API
@@ -100,7 +104,7 @@ FastAPI backend ---------> PostgreSQL
         +---------------> OpenCode-compatible endpoint
 ```
 
-The default executor runs agents in the backend process. An optional Docker executor scaffold is also included for later isolated per-agent execution work.
+The default executor runs agents in the backend process. Redis Streams is an optional low-latency relay; PostgreSQL remains the durable source of truth. An optional Docker executor scaffold is also included for later isolated per-agent execution work.
 
 ## Project Structure
 
@@ -122,7 +126,7 @@ agent-orchestrator-project/
 |   |-- agent_runner/         # Optional container runner
 |   `-- requirements.txt
 |-- trial-folder/             # Local file-workflow inputs
-|-- docker-compose.yml        # PostgreSQL and backend
+|-- docker-compose.yml        # Redis, PostgreSQL, and backend
 |-- docker-compose.hermes.yml # Optional Hermes services
 `-- README.md
 ```
@@ -134,6 +138,7 @@ agent-orchestrator-project/
 - Node.js and npm
 - Python 3.11+
 - PostgreSQL, or Docker Compose
+- Redis for the optional live event relay
 - Ollama only if using local `qwen3:8b`
 
 ### Start PostgreSQL And Backend With Docker
@@ -142,7 +147,7 @@ agent-orchestrator-project/
 docker compose up -d
 ```
 
-This starts PostgreSQL on host port `5434` and the FastAPI backend on `http://localhost:8000`.
+This starts Redis on `localhost:6379`, PostgreSQL on host port `5434`, and the FastAPI backend on `http://localhost:8000`.
 
 ### Start Backend Manually
 
@@ -178,6 +183,7 @@ Open `http://localhost:5173`.
 ollama serve
 ollama pull qwen3:8b
 curl http://localhost:11434/api/tags
+redis-cli ping
 ```
 
 Select `qwen3:8b` on an agent to run through the local Ollama service.
@@ -186,7 +192,7 @@ Select `qwen3:8b` on an agent to run through the local Ollama service.
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
-| `GET` | `/health` | Backend health check |
+| `GET` | `/api/health` | Backend health check |
 | `GET` | `/api/workflows` | List projects |
 | `POST` | `/api/workflows` | Create a project |
 | `GET` | `/api/workflows/{id}` | Load project details |
@@ -198,7 +204,8 @@ Select `qwen3:8b` on an agent to run through the local Ollama service.
 | `POST` | `/api/workflows/{id}/connections` | Add a connection |
 | `DELETE` | `/api/connections/{id}` | Delete a connection |
 | `POST` | `/api/workflows/{id}/runs` | Start a run |
-| `GET` | `/api/runs/{id}` | Poll run status and logs |
+| `GET` | `/api/runs/{id}` | Poll durable run status and logs |
+| `GET` | `/api/runs/{id}/events?after={stream-id}` | Read optional Redis Stream events |
 
 Example run body:
 
@@ -215,7 +222,7 @@ Example run body:
 ## Known Prototype Limits
 
 - Authentication and social login controls are placeholders.
-- Run updates use polling rather than WebSockets.
+- Run updates use Redis-backed REST polling with PostgreSQL fallback rather than WebSockets or Server-Sent Events.
 - Provider keys are browser-managed, not stored in a backend secrets vault.
 - `Run` auto-saves the canvas, but arbitrary edits are not continuously synchronized.
 - Generic file tools are not implemented; the `Read` and `Translate` behaviors are constrained prototypes.
@@ -236,7 +243,7 @@ python3 -m compileall app agent_runner
 For a basic live check:
 
 ```bash
-curl http://localhost:8000/health
+curl http://localhost:8000/api/health
 curl http://localhost:11434/api/tags
 ```
 

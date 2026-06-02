@@ -18,6 +18,7 @@ from app.models.run import Run, RunLog
 from app.services.workflow import get_workflow_graph, topological_sort
 from app.services.llm_gateway import call_llm
 from app.services.docker_executor import run_agent_in_docker
+from app.services.run_events import publish_run_event
 
 
 WORKFLOW_FILES_DIR = Path(__file__).resolve().parents[3] / "trial-folder"
@@ -90,6 +91,7 @@ async def execute_workflow(
 
         run.status = "running"
         await db.commit()
+        await publish_run_event(run_id, "run_started", workflow_id=workflow_id)
 
         try:
             graph = await get_workflow_graph(db, workflow_id)
@@ -122,6 +124,14 @@ async def execute_workflow(
                 )
                 db.add(log_entry)
                 await db.commit()
+                await publish_run_event(
+                    run_id,
+                    "agent_started",
+                    log_id=log_entry.id,
+                    agent_id=agent_id,
+                    agent_name=agent.name,
+                    step=i,
+                )
 
                 workflow_envelope = {
                     "workflow_input": initial_input.strip() if not upstream else "",
@@ -194,13 +204,27 @@ async def execute_workflow(
                 if result.get("error"):
                     log_entry.error = result["error"]
                 await db.commit()
+                await publish_run_event(
+                    run_id,
+                    "agent_completed" if log_entry.status == "completed" else "agent_failed",
+                    log_id=log_entry.id,
+                    agent_id=agent_id,
+                    agent_name=agent.name,
+                    step=i,
+                    output_data=output,
+                    tokens_used=log_entry.tokens_used,
+                    latency_ms=log_entry.latency_ms,
+                    error=log_entry.error,
+                )
 
             run.status = "completed"
             run.finished_at = datetime.now(timezone.utc)
             await db.commit()
+            await publish_run_event(run_id, "run_completed")
 
         except Exception as e:
             run.status = "failed"
             run.error = str(e)
             run.finished_at = datetime.now(timezone.utc)
             await db.commit()
+            await publish_run_event(run_id, "run_failed", error=run.error)
