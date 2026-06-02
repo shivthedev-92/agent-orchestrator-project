@@ -21,13 +21,51 @@ from app.services.docker_executor import run_agent_in_docker
 from app.services.run_events import publish_run_event
 
 
-WORKFLOW_FILES_DIR = Path(__file__).resolve().parents[3] / "trial-folder"
+WORKFLOW_FILES_DIR = (
+    Path(settings.workflow_files_dir).expanduser().resolve()
+    if settings.workflow_files_dir
+    else Path(__file__).resolve().parents[3] / "trial-folder"
+)
 OUTPUT_DIR = WORKFLOW_FILES_DIR / "output"
 MAX_FILE_CHARS = 100_000
 
 
 def _has_skill(agent, skill: str) -> bool:
     return any(str(value).lower() == skill.lower() for value in (agent.skills or []))
+
+
+def _is_translation_agent(agent) -> bool:
+    identity = " ".join([
+        agent.name or "",
+        agent.role or "",
+        *[str(value) for value in (agent.skills or [])],
+    ]).lower()
+    return (
+        _has_skill(agent, "Translate")
+        or bool((agent.config or {}).get("target_language"))
+        or "translator" in identity
+        or "translation" in identity
+    )
+
+
+def _translation_target(agent) -> str:
+    configured = str((agent.config or {}).get("target_language", "")).strip()
+    if configured:
+        return configured
+
+    searchable = " ".join([
+        agent.name or "",
+        agent.role or "",
+        agent.system_prompt or "",
+        *[str(value) for value in (agent.skills or [])],
+    ]).lower()
+    for language in (
+        "Japanese", "French", "Spanish", "German", "Italian", "Portuguese",
+        "Hindi", "Tamil", "Korean", "Chinese", "Arabic", "Dutch",
+    ):
+        if language.lower() in searchable:
+            return language
+    return "French"
 
 
 def _read_workflow_files() -> list[dict[str, str]]:
@@ -41,31 +79,40 @@ def _read_workflow_files() -> list[dict[str, str]]:
 
 
 def _extract_translated_text(content: str) -> str:
-    def collect(value) -> list[str]:
-        found = []
+    def find_file_content(value) -> str | None:
         if isinstance(value, dict):
             files = value.get("files")
             if isinstance(files, list):
-                found.extend(str(item.get("content", "")) for item in files if isinstance(item, dict) and item.get("content"))
+                candidates = [
+                    str(item.get("content", "")).strip()
+                    for item in files
+                    if isinstance(item, dict) and item.get("content")
+                ]
+                if candidates:
+                    return candidates[-1]
             for nested in value.values():
-                found.extend(collect(nested))
+                found = find_file_content(nested)
+                if found:
+                    return found
         elif isinstance(value, list):
             for nested in value:
-                found.extend(collect(nested))
+                found = find_file_content(nested)
+                if found:
+                    return found
         elif isinstance(value, str):
             try:
-                found.extend(collect(json.loads(value)))
+                return find_file_content(json.loads(value))
             except json.JSONDecodeError:
-                pass
-        return found
+                return None
+        return None
 
     cleaned = content.strip().removeprefix("```json").removesuffix("```").strip()
     cleaned = cleaned.replace("\\'", "'")
     try:
-        candidates = collect(json.loads(cleaned))
+        translated = find_file_content(json.loads(cleaned))
     except json.JSONDecodeError:
         return content.strip()
-    return candidates[-1].strip() if candidates else content.strip()
+    return translated or content.strip()
 
 
 def _write_translation_output(agent_name: str, content: str) -> str:
@@ -138,11 +185,12 @@ async def execute_workflow(
                     "files": _read_workflow_files() if not upstream and _has_skill(agent, "Read") else [],
                     "upstream_outputs": input_data,
                 }
+                translation_target = _translation_target(agent) if _is_translation_agent(agent) else ""
                 task_instruction = (
-                    "Translate every source document in upstream_outputs into French. "
-                    "Return only JSON using this exact shape: {\"files\":[{\"name\":\"source-name\",\"content\":\"French translation\"}]}. "
-                    "Do not echo the input envelope, explain your work, or ask for filesystem access."
-                    if _has_skill(agent, "Translate")
+                    f"Translate every source document in upstream_outputs into {translation_target}. "
+                    f"Return only JSON using this exact shape: {{\"files\":[{{\"name\":\"source-name\",\"content\":\"{translation_target} translation\"}}]}}. "
+                    "Do not claim to save files, echo the input envelope, explain your work, or ask for filesystem access."
+                    if translation_target
                     else "Process this workflow envelope using the supplied content directly. Do not ask for filesystem access."
                 )
                 messages = [{
@@ -190,7 +238,7 @@ async def execute_workflow(
                     output["files"] = workflow_envelope["files"]
                 if result.get("error"):
                     output["error"] = result["error"]
-                elif _has_skill(agent, "Translate") and result.get("content"):
+                elif _is_translation_agent(agent) and result.get("content"):
                     output["raw_result"] = result["content"]
                     output["result"] = _extract_translated_text(result["content"])
                     output["output_file"] = _write_translation_output(agent.name, output["result"])

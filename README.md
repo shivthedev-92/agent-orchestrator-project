@@ -1,5 +1,7 @@
 # Andromeda.ai - Visual Agent Orchestration Studio
 
+![Andromeda.ai - Visual Agent Orchestration Studio](project-assets/andromedia-ai-banner-image.png)
+
 Andromeda.ai is a visual workflow studio for building and running connected AI agents. It combines a React canvas, reusable agent templates, project persistence, run logs, and provider-aware LLM execution.
 
 The current version supports real workflow execution through OpenAI, Anthropic, Ollama, and an OpenCode-compatible endpoint. It also includes a focused file-reading and translation workflow for local document experiments.
@@ -55,7 +57,7 @@ The application currently uses REST polling for run updates. Redis Streams reduc
 The current prototype includes two exact skill names with special runtime behavior:
 
 - `Read`: reads files from `trial-folder/` and returns their contents without calling an LLM.
-- `Translate`: asks the selected model for structured translated files, extracts the translated text, and writes timestamped results to `trial-folder/output/`.
+- Translation agents: a `Translate` skill or translator-oriented agent prompt asks the selected model for structured translated files, extracts the translated text, and writes timestamped results to `trial-folder/output/`. The target language can come from `config.target_language`, a language skill such as `Japanese`, or the prompt.
 
 Example workflow:
 
@@ -72,7 +74,7 @@ To try it:
 5. Run the workflow and inspect the bottom terminal.
 6. Find generated files under `trial-folder/output/`.
 
-`trial-folder/output/` is ignored by Git. File access is intentionally constrained to the project trial folder while this feature is still a prototype.
+`trial-folder/output/` is ignored by Git. File access is intentionally constrained to the project trial folder while this feature is still a prototype. When FastAPI runs through Docker Compose, the project folder is bind-mounted into the backend so generated files still appear on the host under `trial-folder/output/`.
 
 ## Model Providers
 
@@ -225,7 +227,7 @@ Example run body:
 - Run updates use Redis-backed REST polling with PostgreSQL fallback rather than WebSockets or Server-Sent Events.
 - Provider keys are browser-managed, not stored in a backend secrets vault.
 - `Run` auto-saves the canvas, but arbitrary edits are not continuously synchronized.
-- Generic file tools are not implemented; the `Read` and `Translate` behaviors are constrained prototypes.
+- Generic file tools are not implemented; the `Read` and translation behaviors are constrained prototypes.
 - Undo, redo, export, settings, shared marketplace publishing, and collaboration are not complete.
 - The frontend still includes visual run animation while backend logs provide the authoritative execution result.
 - The Docker executor is optional groundwork; the default executor is in-process.
