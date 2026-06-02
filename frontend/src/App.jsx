@@ -341,28 +341,59 @@ export default function App() {
 
   const pollBackendRun = (runId) => {
     stopBackendPolling();
+    let lastEventId = '0-0';
+    let relayAvailable = true;
+
+    const pushBackendEntry = (entry) => {
+      if (!entry.id || entry.status === 'running' || backendLogIdsRef.current.has(entry.id)) return;
+      backendLogIdsRef.current.add(entry.id);
+      const output = entry.output_data?.result || entry.error || 'No output returned.';
+      const suffix = entry.tokens_used ? ` (${entry.tokens_used} tokens)` : '';
+      pushLog(entry.agent_name || 'agent', `${output}${suffix}`, entry.status === 'failed' ? 'err' : 'ok');
+    };
+
+    const finishBackendRun = (status, error = '') => {
+      stopBackendPolling();
+      setBackendRunning(false);
+      pushLog('orchestrator', status === 'completed' ? 'backend run complete' : `backend run failed: ${error || 'unknown error'}`, status === 'completed' ? 'ok' : 'err');
+    };
+
     const poll = async () => {
       try {
+        if (relayAvailable) {
+          const relay = await api.getRunEvents(runId, lastEventId);
+          relayAvailable = relay.available;
+          if (relayAvailable) {
+            for (const event of relay.events || []) {
+              lastEventId = event.id;
+              const payload = event.payload || {};
+              if (event.type === 'agent_completed' || event.type === 'agent_failed') {
+                pushBackendEntry({
+                  id: payload.log_id,
+                  agent_name: payload.agent_name,
+                  output_data: payload.output_data,
+                  tokens_used: payload.tokens_used,
+                  error: payload.error,
+                  status: event.type === 'agent_failed' ? 'failed' : 'completed',
+                });
+              }
+              if (event.type === 'run_completed') finishBackendRun('completed');
+              if (event.type === 'run_failed') finishBackendRun('failed', payload.error);
+            }
+            return;
+          }
+        }
+
         const backendRun = await api.getRun(runId);
-        for (const entry of backendRun.logs || []) {
-          if (entry.status === 'running' || backendLogIdsRef.current.has(entry.id)) continue;
-          backendLogIdsRef.current.add(entry.id);
-          const output = entry.output_data?.result || entry.error || 'No output returned.';
-          const suffix = entry.tokens_used ? ` (${entry.tokens_used} tokens)` : '';
-          pushLog(entry.agent_name || 'agent', `${output}${suffix}`, entry.status === 'failed' ? 'err' : 'ok');
-        }
-        if (backendRun.status === 'completed' || backendRun.status === 'failed') {
-          stopBackendPolling();
-          setBackendRunning(false);
-          pushLog('orchestrator', backendRun.status === 'completed' ? 'backend run complete' : `backend run failed: ${backendRun.error || 'unknown error'}`, backendRun.status === 'completed' ? 'ok' : 'err');
-        }
+        for (const entry of backendRun.logs || []) pushBackendEntry(entry);
+        if (backendRun.status === 'completed' || backendRun.status === 'failed') finishBackendRun(backendRun.status, backendRun.error);
       } catch (e) {
         stopBackendPolling();
         setBackendRunning(false);
         pushLog('orchestrator', `could not read backend logs: ${e.message}`, 'err');
       }
     };
-    backendPollRef.current = setInterval(poll, 700);
+    backendPollRef.current = setInterval(poll, 350);
     poll();
   };
 

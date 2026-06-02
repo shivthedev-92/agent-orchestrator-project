@@ -36,4 +36,5 @@ export const api = {
   startRun: (workflowId, apiKeys = {}, inputText = '') => request('POST', `/workflows/${workflowId}/run`, { api_keys: apiKeys, input_text: inputText }),
   getRuns: (workflowId) => request('GET', `/workflows/${workflowId}/runs`),
   getRun: (runId) => request('GET', `/runs/${runId}`),
+  getRunEvents: (runId, after = '0-0') => request('GET', `/runs/${runId}/events?after=${encodeURIComponent(after)}`),
 };

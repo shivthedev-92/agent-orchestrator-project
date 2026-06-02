@@ -1,7 +1,7 @@
 import asyncio
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -11,6 +11,7 @@ from app.models.workflow import Workflow
 from app.models.run import Run, RunLog
 from app.schemas.run import RunStartRequest, RunResponse, RunCreateResponse
 from app.services.execution import execute_workflow
+from app.services.run_events import read_run_events
 
 router = APIRouter(tags=["runs"])
 
@@ -49,3 +50,15 @@ async def get_run(run_id: UUID, db: AsyncSession = Depends(get_db)):
     if not run:
         raise HTTPException(404, "Run not found")
     return run
+
+
+@router.get("/api/runs/{run_id}/events")
+async def get_run_events(
+    run_id: UUID,
+    after: str = Query("0-0", pattern=r"^(\d+)-(\d+)$"),
+    count: int = Query(100, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+):
+    if not await db.get(Run, run_id):
+        raise HTTPException(404, "Run not found")
+    return await read_run_events(run_id, after=after, count=count)
